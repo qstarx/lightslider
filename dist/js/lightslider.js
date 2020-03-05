@@ -1,6 +1,6 @@
-/*! lightslider - v1.1.6 - 2016-10-25
+/*! lightslider - v1.1.6 - 2020-03-05
 * https://github.com/sachinchoolur/lightslider
-* Copyright (c) 2016 Sachin N; Licensed MIT */
+* Copyright (c) 2020 Sachin N; Licensed MIT */
 (function ($, undefined) {
     'use strict';
     var defaults = {
@@ -39,6 +39,9 @@
         freeMove: true,
         swipeThreshold: 40,
         responsive: [],
+        canvas: false,
+        canvasScale: false,
+        pagerCallback: false,
         /* jshint ignore:start */
         onBeforeStart: function ($el) {},
         onSliderLoad: function ($el) {},
@@ -345,8 +348,9 @@
                     var $children = $slide.find('.lslide');
                     var length = $slide.find('.lslide').length;
                     var i = 0,
-                        pagers = '',
                         v = 0;
+                    var $cSouter = $slide.parent();
+                    $cSouter.find('.lSPager').html(''); 
                     for (i = 0; i < length; i++) {
                         if (settings.mode === 'slide') {
                             // calculate scene * slide value
@@ -358,20 +362,34 @@
                         }
                         var thumb = $children.eq(i * settings.slideMove).attr('data-thumb');
                         if (settings.gallery === true) {
-                            pagers += '<li style="width:100%;' + property + ':' + thumbWidth + 'px;' + gutter + ':' + settings.thumbMargin + 'px"><a href="#"><img src="' + thumb + '" /></a></li>';
+                           if (settings.canvas === true) {
+                             if (!$this.canvasThumbs) $this.canvasThumbs = []
+                             if (!$this.canvasThumbs[i]) $this.canvasThumbs[i] = false
+                             // first load initial image, which is replaced by canvas later
+                             var $pager = $('<li style="width:100%;' + property + ':' + thumbWidth + 'px;' + gutter + ':' + settings.thumbMargin + 'px"><a href="#"><img class="pager" id="lsc-' + i + '" src="' + thumb + '" /></a></li>');
+                             // if canvas already generated, replace immediately
+                             if ($this.canvasThumbs[i]) $pager.find('[class=pager]').replaceWith($this.canvasThumbs[i])
+                             $cSouter.find('.lSPager').append($pager)
+                           } else if (settings.clonePager === true) {
+                             var $pager = $('<li class="' + settings.pagerClass + '" style="width:100%;' + property + ':' + thumbWidth + 'px;' + gutter + ':' + settings.thumbMargin + 'px"><a href="#"><img class="pager" id="lsc-' + i + '" src="' + thumb + '" /></a></li>');
+                             var $slidenode = $($slide.find('.lslide:nth-child(' + (i+1)   + ') div:first-child').get(0)).clone()
+                             $pager.find('#lsc-' + i ).replaceWith($slidenode)
+                             $cSouter.find('.lSPager').append($pager)
+                           } else {  
+                             $cSouter.find('.lSPager').append($('<li style="width:100%;' + property + ':' + thumbWidth + 'px;' + gutter + ':' + settings.thumbMargin + 'px"><a href="#"><img src="' + thumb + '" /></a></li>'));
+                           }
                         } else {
-                            pagers += '<li><a href="#">' + (i + 1) + '</a></li>';
+                            $cSouter.find('.lSPager').append($('<li><a href="#">' + (i + 1) + '</a></li>'));
                         }
                         if (settings.mode === 'slide') {
                             if ((v) >= w - elSize - settings.slideMargin) {
                                 i = i + 1;
                                 var minPgr = 2;
                                 if (settings.autoWidth) {
-                                    pagers += '<li><a href="#">' + (i + 1) + '</a></li>';
+                                    $cSouter.find('.lSPager').append($('<li><a href="#">' + (i + 1) + '</a></li>'));
                                     minPgr = 1;
                                 }
                                 if (i < minPgr) {
-                                    pagers = null;
                                     $slide.parent().addClass('noPager');
                                 } else {
                                     $slide.parent().removeClass('noPager');
@@ -381,7 +399,24 @@
                         }
                     }
                     var $cSouter = $slide.parent();
-                    $cSouter.find('.lSPager').html(pagers); 
+                    
+                    if (settings.canvas === true) {
+                       // create canvas from slide and set as pager thumb
+                       $this.canvasThumbs.forEach(function(ct,i) {
+                       var $slidenode = $slide.find('.lslide').get(i)
+                             if ($this.canvasThumbs[i]===false) {
+                             html2canvas($slidenode,{scale:settings.canvasScale*2}).then(function(canvas) {
+                                 if (settings.canvasScale) {
+                                   $(canvas).width($(canvas).width()*settings.canvasScale)
+                                   $(canvas).height($(canvas).height()*settings.canvasScale)
+                                 }
+                                 $('#lsc-' + i ).replaceWith(canvas)
+                                 // store canvas for redraw
+                                 $this.canvasThumbs[i] = canvas
+                              });
+                             }
+                       })
+                    } 
                     if (settings.gallery === true) {
                         if (settings.vertical === true) {
                             // set Gallery thumbnail width
@@ -472,6 +507,11 @@
                 }
             },
             active: function (ob, t) {
+                if (settings.pagerCallback) {
+                  var act_idx = 0
+                  ob.each(function(i,el) { if($(el).hasClass("active")) act_idx=i })
+                  settings.pagerCallback(act_idx)   
+                } 
                 if (this.doCss() && settings.mode === 'fade') {
                     $slide.addClass('on');
                 }
